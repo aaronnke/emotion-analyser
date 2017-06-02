@@ -7,16 +7,31 @@
   </head>
   <body>
 
-    <p> Select large / small faces detection. <br/> Wait, and video will autoplay. Emotions will be analysed. <br/> Once the emotion analysis stops (the jumpy emotion data, NOT when video stops), press 'GET JSON'. <br/> You can also pause video to end analysis early. <br/> A file will be generated 'DOWNLOAD JSON'.</p>
+    <p> Input a video URL like 'https://s3-ap-southeast-1.amazonaws.com/grdient-interviewer-dev/affectiva/Intro.mp4' and press 'Enter'. <br/> Select large / small faces detection. <br/> Wait, and video will autoplay. Emotions will be analysed. <br/> Once the emotion analysis stops (the jumpy emotion data, NOT when video stops), press 'GET JSON'. <br/> You can also pause video to end analysis early. <br/> A file will be generated 'DOWNLOAD JSON'.</p>
+
+    <form action="#" onsubmit="updateVideoURL()">
+      Video URL:<br>
+      <input id="VideoURL" type="text" style="width: 300px; height: 24px; margin-bottom: 12px;">
+    </form>
+
     <button id="js-get-large-faces">DETECT LARGE FACES</button>
     <button id="js-get-small-faces">DETECT SMALL FACES</button>
-    <video src="https://s3-ap-southeast-1.amazonaws.com/grdient-interviewer-dev/affectiva/Intro.mp4" id="VideoPlayer" controls=true height=480 width=640 crossorigin="anonymous"></video>
-    <canvas id="Canvas" height=480 width=640 style="display: none;"> </canvas>
+
+    <video id="VideoPlayer" controls=true height=720 width=1280 crossorigin="anonymous"></video>
+    <canvas id="Canvas" height=720 width=1280 style="display: none;"> </canvas>
+
+    <pre id="timestamp"> </pre>
     <pre id="emotions"> </pre>
     <pre id="expressions"> </pre>
+
     <button id="js-get-json">GET JSON</button>
 
     <script>
+
+      function updateVideoURL() {
+        document.getElementById('VideoPlayer').src = document.getElementById('VideoURL').value;
+      }
+
       document.getElementById('js-get-large-faces').addEventListener('click', initAffectiva)
       document.getElementById('js-get-small-faces').addEventListener('click', initAffectiva)
 
@@ -37,27 +52,45 @@
         detector.detectAllAppearance();
 
         var videoPlayer = document.getElementById('VideoPlayer');
+        var startTimestamp = null;
 
         detector.addEventListener("onInitializeSuccess", function() {
           videoPlayer.play();
+          startTimestamp = (new Date()).getTime() / 1000;
         });
 
         var json = [];
 
         detector.addEventListener("onImageResultsSuccess", function (faces, image, timestamp) {
           if (faces.length > 0) {
-            document.getElementById('emotions').innerHTML = JSON.stringify(faces[0].emotions)
-            document.getElementById('expressions').innerHTML = JSON.stringify(faces[0].expressions)
+            document.getElementById('timestamp').innerHTML = 'Timestamp: ' + timestamp.toFixed(2);
+            document.getElementById('emotions').innerHTML = JSON.stringify(faces[0].emotions, null, 2)
+            document.getElementById('expressions').innerHTML = JSON.stringify(faces[0].expressions, null, 2)
             json.push({timestamp: timestamp, emotions: faces[0].emotions, expressions: faces[0].expressions});
+            for (var j = 0; j < faces.length; j++) {
+              drawFeaturePoints(image, faces[j].featurePoints);
+            }
+          }
+          else {
+            console.log('no face');
           }
         });
+
+        function drawFeaturePoints(img, featurePoints) {
+          var contxt = document.getElementById('Canvas').getContext('2d');
+          contxt.fillStyle = "#FFFFFF";
+          for (var id in featurePoints) {
+            contxt.beginPath();
+            contxt.arc(featurePoints[id].x,
+              featurePoints[id].y, 2, 0, 2 * Math.PI);
+            contxt.fill();
+          }
+        }
 
         detector.start();
 
         var aCanvas = document.getElementById("Canvas");
         var context = aCanvas.getContext('2d');
-
-        var startTimestamp = (new Date()).getTime() / 1000;
 
         videoPlayer.addEventListener('play', function(){
           draw(this, context);
@@ -65,12 +98,12 @@
 
         function draw(video, context, json) {
           if (video.paused || video.ended) return false;
-          context.drawImage(video,0,0,640,480);
-          var imageData = context.getImageData(0, 0, 640, 480);
+          context.drawImage(video,0,0,1280,720);
+          var imageData = context.getImageData(0, 0, 1280, 720);
           var now = (new Date()).getTime() / 1000;
           var deltaTime = now - startTimestamp;
           detector.process(imageData, deltaTime);
-          setTimeout(draw,20,video,context);
+          setTimeout(draw,50,video,context);
         }
 
         document.getElementById('js-get-json').addEventListener('click', function() {
